@@ -1,0 +1,34 @@
+{
+    "name": "performingdigital/laravel-query-tool",
+    "description": "Safe query DSL executor for Laravel chatbots.",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "PerformingDigital\\QueryTool\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PerformingDigital\\QueryTool\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/database": "^10.0|^11.0|^12.0",
+        "illuminate/support": "^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "pestphp/pest": "^2.0|^3.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "PerformingDigital\\QueryTool\\QueryToolServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
