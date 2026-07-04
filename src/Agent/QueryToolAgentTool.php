@@ -2,109 +2,65 @@
 
 namespace PerformingDigital\QueryTool\Agent;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Request;
 use PerformingDigital\QueryTool\StatsQueryExecutor;
+use Stringable;
 
-final class QueryToolAgentTool
+final class QueryToolAgentTool implements Tool
 {
     public function __construct(
         private readonly StatsQueryExecutor $executor,
     ) {}
 
-    public function name(): string
-    {
-        return 'query_dataset_statistics';
-    }
-
-    public function description(): string
+    public function description(): Stringable|string
     {
         return 'Run a safe aggregate/statistics query on a whitelisted dataset. Use this for totals, counts, averages, rankings and grouped statistics. Never use it for arbitrary SQL.';
     }
 
-    /**
-     * OpenAI/Anthropic-style JSON schema for function/tool calling.
-     *
-     * @return array<string, mixed>
-     */
-    public function schema(): array
+    public function handle(Request $request): Stringable|string
     {
-        return [
-            'name' => $this->name(),
-            'description' => $this->description(),
-            'parameters' => [
-                'type' => 'object',
-                'additionalProperties' => false,
-                'required' => ['dataset', 'metrics'],
-                'properties' => [
-                    'dataset' => [
-                        'type' => 'string',
-                        'description' => 'Whitelisted dataset name, for example orders.',
-                    ],
-                    'metrics' => [
-                        'type' => 'array',
-                        'minItems' => 1,
-                        'items' => ['type' => 'string'],
-                        'description' => 'Metric names configured for the dataset, for example revenue or orders.',
-                    ],
-                    'dimensions' => [
-                        'type' => 'array',
-                        'items' => ['type' => 'string'],
-                        'description' => 'Optional group-by dimensions configured for the dataset.',
-                    ],
-                    'filters' => [
-                        'type' => 'array',
-                        'items' => [
-                            'type' => 'object',
-                            'additionalProperties' => false,
-                            'required' => ['field', 'op', 'value'],
-                            'properties' => [
-                                'field' => ['type' => 'string'],
-                                'op' => [
-                                    'type' => 'string',
-                                    'enum' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'],
-                                ],
-                                'value' => [
-                                    'description' => 'Scalar value or array for in operator.',
-                                ],
-                            ],
-                        ],
-                    ],
-                    'sort' => [
-                        'type' => 'object',
-                        'additionalProperties' => false,
-                        'required' => ['field', 'dir'],
-                        'properties' => [
-                            'field' => ['type' => 'string'],
-                            'dir' => ['type' => 'string', 'enum' => ['asc', 'desc']],
-                        ],
-                    ],
-                    'limit' => [
-                        'type' => 'integer',
-                        'minimum' => 1,
-                        'maximum' => 100,
-                    ],
-                ],
-            ],
-        ];
+        return json_encode([
+            'rows' => $this->executor->run($request->all()),
+        ], JSON_THROW_ON_ERROR);
     }
 
-    /**
-     * @return array{tool:string, rows:array<int, array<string, mixed>>}
-     */
-    public function handle(array $arguments): array
+    public function schema(JsonSchema $schema): array
     {
         return [
-            'tool' => $this->name(),
-            'rows' => $this->executor->run($arguments),
-        ];
-    }
+            'dataset' => $schema->string()
+                ->description('Whitelisted dataset name, for example orders.')
+                ->required(),
 
-    /**
-     * Alias useful for invokable agent integrations.
-     *
-     * @return array{tool:string, rows:array<int, array<string, mixed>>}
-     */
-    public function __invoke(array $arguments): array
-    {
-        return $this->handle($arguments);
+            'metrics' => $schema->array()
+                ->items($schema->string())
+                ->description('Metric names configured for the dataset, for example revenue or orders.')
+                ->required(),
+
+            'dimensions' => $schema->array()
+                ->items($schema->string())
+                ->description('Optional group-by dimensions configured for the dataset.'),
+
+            'filters' => $schema->array()
+                ->items($schema->object([
+                    'field' => $schema->string()->required(),
+                    'op' => $schema->string()
+                        ->enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'])
+                        ->required(),
+                    'value' => $schema->string()->description('Filter value. Use JSON encoded arrays for the in operator.')->required(),
+                ]))
+                ->description('Optional filters.'),
+
+            'sort' => $schema->object([
+                'field' => $schema->string()->required(),
+                'dir' => $schema->string()->enum(['asc', 'desc'])->required(),
+            ])->description('Optional sort.'),
+
+            'limit' => $schema->integer()
+                ->min(1)
+                ->max(100)
+                ->description('Maximum number of rows to return.'),
+        ];
     }
 }
